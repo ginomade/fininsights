@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StockIA • Analizador de Acciones</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap');
+        :root { --celeste: #00d4ff; }
+        * { transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1); }
+        .glass { background: rgba(255,255,255,0.08); backdrop-filter: blur(16px); }
+        .card { box-shadow: 0 25px 50px -12px rgb(0 212 255 / 0.15); }
+        .price-ticker { font-family: 'Space Grotesk', sans-serif; }
+    </style>
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen font-sans">
+    <div class="max-w-4xl mx-auto px-6 py-12">
+        <div class="flex items-center justify-between mb-12">
+            <div class="flex items-center gap-x-3">
+                <div class="w-11 h-11 bg-[#00d4ff] rounded-2xl flex items-center justify-center text-gray-950 text-3xl font-bold">📈</div>
+                <div>
+                    <h1 class="text-4xl font-semibold tracking-tighter price-ticker">StockIA</h1>
+                    <p class="text-gray-400 -mt-1">Yahoo Finance + OpenAI (seguro)</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="glass rounded-3xl p-8 border border-white/10 mb-10">
+            <label class="block text-xs uppercase tracking-widest text-gray-400 mb-3">Símbolo de la acción</label>
+            <div class="flex gap-4">
+                <input id="ticker" type="text" maxlength="10" placeholder="AAPL, TSLA, MELI, GGAL..." 
+                       class="flex-1 bg-white/5 border border-white/10 focus:border-[#00d4ff] rounded-3xl px-7 py-5 text-2xl font-semibold outline-none uppercase text-center">
+                <button onclick="analizarAccion()" id="btnAnalizar"
+                        class="px-10 bg-[#00d4ff] hover:bg-[#00b8e6] text-gray-950 font-semibold text-xl rounded-3xl flex items-center gap-x-3 shadow-xl shadow-[#00d4ff]/30">
+                    Analizar
+                </button>
+            </div>
+        </div>
+
+        <!-- Resultados -->
+        <div id="resultados" class="hidden">
+            <div class="glass rounded-3xl p-8 mb-8 border border-white/10 card">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <h2 id="symbol" class="text-5xl font-semibold price-ticker"></h2>
+                        <p id="companyName" class="text-xl text-gray-400"></p>
+                    </div>
+                    <div class="text-right">
+                        <div id="price" class="text-6xl font-semibold price-ticker"></div>
+                        <div id="change" class="text-2xl mt-2"></div>
+                    </div>
+                </div>
+                <div id="lastUpdated" class="text-xs text-gray-500 mt-6"></div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                <div class="lg:col-span-7 glass rounded-3xl p-8 border border-white/10 card">
+                    <h3 class="uppercase text-xs tracking-widest text-gray-400 mb-4">Análisis IA</h3>
+                    <p id="analisisText" class="text-lg leading-relaxed"></p>
+                </div>
+
+                <div class="lg:col-span-5 glass rounded-3xl p-8 border border-white/10 card flex items-center justify-center">
+                    <div id="recomendacionContainer" class="w-48 h-48 rounded-3xl flex flex-col items-center justify-center border-4 text-center"></div>
+                </div>
+            </div>
+
+            <div class="text-center mt-12">
+                <button onclick="nuevaConsulta()" 
+                        class="px-8 py-4 border border-white/30 hover:border-white/60 rounded-3xl text-sm font-medium">
+                    Nueva consulta
+                </button>
+            </div>
+        </div>
+
+        <div id="estado" class="text-center py-20 text-gray-400">
+            <div class="mx-auto w-16 h-16 border-4 border-[#00d4ff]/30 border-t-[#00d4ff] rounded-full animate-spin mb-6"></div>
+            <p id="estadoTexto">Ingresa un símbolo (ej: AAPL) y presiona Analizar</p>
+        </div>
+    </div>
+
+    <script>
+        async function analizarAccion() {
+            const ticker = document.getElementById('ticker').value.trim().toUpperCase();
+            const btn = document.getElementById('btnAnalizar');
+
+            if (!ticker) return alert("Ingresa un símbolo de acción");
+
+            btn.disabled = true;
+            btn.textContent = "Analizando...";
+
+            document.getElementById('estadoTexto').textContent = "Consultando Yahoo Finance y OpenAI...";
+
+            try {
+                const res = await fetch('/.netlify/functions/analyze', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ticker })
+                });
+
+                const data = await res.json();
+
+                if (!data.success) throw new Error(data.error || "Error desconocido");
+
+                mostrarResultados(data.stock, data.analysis);
+
+            } catch (err) {
+                alert("❌ " + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = `Analizar`;
+            }
+        }
+
+        function mostrarResultados(stock, ai) {
+            document.getElementById('resultados').classList.remove('hidden');
+            document.getElementById('estado').classList.add('hidden');
+
+            // Datos básicos
+            document.getElementById('symbol').textContent = stock.symbol;
+            document.getElementById('companyName').textContent = stock.longName;
+            document.getElementById('price').innerHTML = `${stock.price} <span class="text-2xl text-gray-400">${stock.currency}</span>`;
+
+            const changeEl = document.getElementById('change');
+            const positivo = stock.change >= 0;
+            changeEl.innerHTML = `
+                <span class="${positivo ? 'text-emerald-400' : 'text-red-400'}">
+                    ${positivo ? '▲' : '▼'} ${Math.abs(stock.change).toFixed(2)} (${stock.changePercent.toFixed(2)}%)
+                </span>
+            `;
+            document.getElementById('lastUpdated').textContent = `Actualizado: ${stock.marketTime}`;
+
+            // Análisis
+            document.getElementById('analisisText').innerHTML = `
+                <span class="font-semibold text-[#00d4ff]">${ai.recomendacion}</span><br>
+                ${ai.analisis}
+            `;
+
+            // Indicador visual grande
+            const container = document.getElementById('recomendacionContainer');
+            let color = '', icon = '', bg = '';
+
+            if (ai.recomendacion === "COMPRA") {
+                color = "text-emerald-400"; icon = "▲"; bg = "border-emerald-400 bg-emerald-500/10";
+            } else if (ai.recomendacion === "VENTA") {
+                color = "text-red-400"; icon = "▼"; bg = "border-red-400 bg-red-500/10";
+            } else {
+                color = "text-amber-400"; icon = "→"; bg = "border-amber-400 bg-amber-500/10";
+            }
+
+            container.className = `w-48 h-48 rounded-3xl flex flex-col items-center justify-center border-4 shadow-2xl ${bg}`;
+            container.innerHTML = `
+                <div class="${color} text-8xl mb-3">${icon}</div>
+                <div class="${color} text-4xl font-bold">${ai.recomendacion}</div>
+                <div class="mt-8 w-36 h-2 bg-white/20 rounded-full overflow-hidden">
+                    <div class="h-full bg-current" style="width: ${ai.confianza}%"></div>
+                </div>
+                <p class="text-xs text-gray-400 mt-2">Confianza ${ai.confianza}%</p>
+            `;
+        }
+
+        function nuevaConsulta() {
+            document.getElementById('resultados').classList.add('hidden');
+            document.getElementById('estado').classList.remove('hidden');
+            document.getElementById('ticker').focus();
+        }
+
+        // Soporte tecla Enter
+        document.getElementById('ticker').addEventListener('keypress', e => {
+            if (e.key === 'Enter') analizarAccion();
+        });
+
+        console.log("%c✅ StockIA con Netlify Functions - Clave OpenAI protegida", "color:#00d4ff; font-size:14px");
+    </script>
+</body>
+</html>
