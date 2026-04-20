@@ -9,7 +9,6 @@ export default async function handler(request, context) {
 
     try {
         const { ticker } = await request.json();
-
         if (!ticker) {
             return new Response(JSON.stringify({ error: "Falta el símbolo de la acción" }), { 
                 status: 400, 
@@ -18,45 +17,42 @@ export default async function handler(request, context) {
         }
 
         const symbol = ticker.toUpperCase();
+        const fmpKey = process.env.FMP_API_KEY;
 
-        // === 1. Datos de Yahoo Finance (versión corregida con headers) ===
-        const yahooRes = await fetch(
-            `https://query2.finance.yahoo.com/v7/finance/quote?symbols=${symbol}`,
-            {
-                headers: {
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36",
-                    "Accept": "application/json",
-                    "Referer": "https://finance.yahoo.com/"
-                }
-            }
-        );
-
-        if (!yahooRes.ok) {
-            console.error(`Yahoo responded with ${yahooRes.status}`);
-            throw new Error(`Yahoo Finance error: ${yahooRes.status} - Intenta más tarde o prueba otro símbolo`);
+        if (!fmpKey) {
+            throw new Error("FMP_API_KEY no configurada en las variables de entorno de Netlify.");
         }
 
-        const yahooData = await yahooRes.json();
-        const quote = yahooData.quoteResponse?.result?.[0];
+        // === 1. Obtener datos con Financial Modeling Prep ===
+        const fmpRes = await fetch(
+            `https://financialmodelingprep.com/api/v3/quote/${symbol}?apikey=${fmpKey}`
+        );
+
+        if (!fmpRes.ok) {
+            throw new Error(`Error en FMP: ${fmpRes.status} - Verifica el símbolo o tu clave`);
+        }
+
+        const quotes = await fmpRes.json();
+        const quote = quotes[0];
 
         if (!quote) {
-            throw new Error("Acción no encontrada. Verifica el símbolo (ej: AAPL, TSLA, MELI)");
+            throw new Error("Acción no encontrada. Prueba con AAPL, TSLA, MELI, etc.");
         }
 
         const stockData = {
             symbol: quote.symbol,
-            longName: quote.longName || quote.shortName || "N/A",
-            price: quote.regularMarketPrice ?? quote.price,
-            change: quote.regularMarketChange,
-            changePercent: quote.regularMarketChangePercent,
-            currency: quote.currency || "USD",
+            longName: quote.name || "N/A",
+            price: quote.price,
+            change: quote.change,
+            changePercent: quote.changesPercentage,
+            currency: "USD",   // FMP usa USD principalmente
             marketTime: new Date().toLocaleString('es-AR')
         };
 
-        // === 2. Análisis con OpenAI (sin cambios) ===
+        // === 2. Análisis con OpenAI (igual que antes) ===
         const openaiKey = process.env.OPENAI_API_KEY;
         if (!openaiKey || !openaiKey.startsWith("sk-")) {
-            throw new Error("Clave OpenAI no configurada correctamente.");
+            throw new Error("OPENAI_API_KEY no configurada correctamente.");
         }
 
         const prompt = `Eres un analista financiero profesional y directo.
@@ -90,16 +86,13 @@ Responde ÚNICAMENTE con un JSON válido:
             })
         });
 
-        if (!openaiRes.ok) {
-            throw new Error("Error al conectar con OpenAI");
-        }
+        if (!openaiRes.ok) throw new Error("Error al conectar con OpenAI");
 
         const openaiResult = await openaiRes.json();
         let content = openaiResult.choices[0].message.content.trim();
 
-        // Limpiar JSON
         if (content.includes("```")) {
-            content = content.split("```")[1].replace("json", "").trim();
+            content = content.split("```")[1].replace(/json/gi, "").trim();
         }
 
         const aiAnalysis = JSON.parse(content);
