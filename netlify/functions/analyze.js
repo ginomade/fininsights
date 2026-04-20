@@ -17,39 +17,39 @@ export default async function handler(request, context) {
         }
 
         const symbol = ticker.toUpperCase();
-        const fmpKey = process.env.FMP_API_KEY;
+        const finnhubKey = process.env.FINNHUB_API_KEY;
 
-        if (!fmpKey) {
-            throw new Error("FMP_API_KEY no configurada en las variables de entorno de Netlify.");
+        if (!finnhubKey) {
+            throw new Error("FINNHUB_API_KEY no está configurada en Netlify.");
         }
 
-        // === 1. Obtener datos con Financial Modeling Prep ===
-        const fmpRes = await fetch(
-            `https://financialmodelingprep.com/api/v3/quote/${symbol}?apikey=${fmpKey}`
+        // === 1. Obtener datos de Finnhub ===
+        const quoteRes = await fetch(
+            `https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${finnhubKey}`
         );
 
-        if (!fmpRes.ok) {
-            throw new Error(`Error en FMP: ${fmpRes.status} - Verifica el símbolo o tu clave`);
+        if (!quoteRes.ok) {
+            throw new Error(`Error en Finnhub: ${quoteRes.status}. Verifica el símbolo o tu clave.`);
         }
 
-        const quotes = await fmpRes.json();
-        const quote = quotes[0];
+        const quote = await quoteRes.json();
 
-        if (!quote) {
-            throw new Error("Acción no encontrada. Prueba con AAPL, TSLA, MELI, etc.");
+        if (quote.c === 0 || !quote.c) {
+            throw new Error("Acción no encontrada o sin datos recientes. Prueba AAPL, TSLA, MELI, etc.");
         }
 
+        // Finnhub devuelve precio actual (c), cambio (d) y % (dp)
         const stockData = {
-            symbol: quote.symbol,
-            longName: quote.name || "N/A",
-            price: quote.price,
-            change: quote.change,
-            changePercent: quote.changesPercentage,
-            currency: "USD",   // FMP usa USD principalmente
+            symbol: symbol,
+            longName: symbol, // Finnhub quote no devuelve nombre completo, usamos símbolo por ahora
+            price: quote.c,
+            change: quote.d,
+            changePercent: quote.dp,
+            currency: "USD",
             marketTime: new Date().toLocaleString('es-AR')
         };
 
-        // === 2. Análisis con OpenAI (igual que antes) ===
+        // === 2. Análisis con OpenAI ===
         const openaiKey = process.env.OPENAI_API_KEY;
         if (!openaiKey || !openaiKey.startsWith("sk-")) {
             throw new Error("OPENAI_API_KEY no configurada correctamente.");
