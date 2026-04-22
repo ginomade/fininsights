@@ -61,7 +61,7 @@
                 </div>
 
                 <div class="lg:col-span-5 glass rounded-3xl p-8 border border-white/10 card flex items-center justify-center">
-                    <div id="recomendacionContainer" class="w-48 h-48 rounded-3xl flex flex-col items-center justify-center border-4 text-center"></div>
+                    <div id="recomendacionContainer" class="w-56 h-56 rounded-3xl flex flex-col items-center justify-center border-4 shadow-2xl"></div>
                 </div>
             </div>
 
@@ -113,51 +113,75 @@
         }
 
         function mostrarResultados(stock, ai) {
-            document.getElementById('resultados').classList.remove('hidden');
-            document.getElementById('estado').classList.add('hidden');
+			document.getElementById('resultados').classList.remove('hidden');
+			document.getElementById('estado').classList.add('hidden');
 
-            // Datos básicos
-            document.getElementById('symbol').textContent = stock.symbol;
-            document.getElementById('companyName').textContent = stock.longName;
-            document.getElementById('price').innerHTML = `${stock.price} <span class="text-2xl text-gray-400">${stock.currency}</span>`;
+			// Datos básicos de la acción
+			document.getElementById('symbol').textContent = stock.symbol;
+			document.getElementById('companyName').textContent = stock.longName || stock.symbol;
+			
+			document.getElementById('price').innerHTML = `
+				${stock.price} 
+				<span class="text-2xl text-gray-400 ml-2">${stock.currency}</span>
+			`;
 
-            const changeEl = document.getElementById('change');
-            const positivo = stock.change >= 0;
-            changeEl.innerHTML = `
-                <span class="${positivo ? 'text-emerald-400' : 'text-red-400'}">
-                    ${positivo ? '▲' : '▼'} ${Math.abs(stock.change).toFixed(2)} (${stock.changePercent.toFixed(2)}%)
-                </span>
-            `;
-            document.getElementById('lastUpdated').textContent = `Actualizado: ${stock.marketTime}`;
+			const changeEl = document.getElementById('change');
+			const isPositive = stock.change >= 0;
+			changeEl.innerHTML = `
+				<span class="${isPositive ? 'text-emerald-400' : 'text-red-400'} font-medium">
+					${isPositive ? '▲' : '▼'} ${Math.abs(stock.change).toFixed(2)} 
+					(${stock.changePercent?.toFixed(2) || 'N/A'}%)
+				</span>
+			`;
 
-            // Análisis
-            document.getElementById('analisisText').innerHTML = `
-                <span class="font-semibold text-[#00d4ff]">${ai.recomendacion}</span><br>
-                ${ai.analisis}
-            `;
+			document.getElementById('lastUpdated').textContent = `Actualizado: ${stock.marketTime}`;
 
-            // Indicador visual grande
-            const container = document.getElementById('recomendacionContainer');
-            let color = '', icon = '', bg = '';
+			// Texto del análisis
+			document.getElementById('analisisText').innerHTML = `
+				<span class="font-semibold text-[#00d4ff]">${ai.recomendacion}</span><br><br>
+				${ai.analisis}
+			`;
 
-            if (ai.recomendacion === "COMPRA") {
-                color = "text-emerald-400"; icon = "▲"; bg = "border-emerald-400 bg-emerald-500/10";
-            } else if (ai.recomendacion === "VENTA") {
-                color = "text-red-400"; icon = "▼"; bg = "border-red-400 bg-red-500/10";
-            } else {
-                color = "text-amber-400"; icon = "→"; bg = "border-amber-400 bg-amber-500/10";
-            }
+			// === INDICADOR VISUAL MEJORADO (sin superposición) ===
+			const container = document.getElementById('recomendacionContainer');
+			
+			let colorClass = '';
+			let iconHTML = '';
+			let bgColor = '';
 
-            container.className = `w-48 h-48 rounded-3xl flex flex-col items-center justify-center border-4 shadow-2xl ${bg}`;
-            container.innerHTML = `
-                <div class="${color} text-8xl mb-3">${icon}</div>
-                <div class="${color} text-4xl font-bold">${ai.recomendacion}</div>
-                <div class="mt-8 w-36 h-2 bg-white/20 rounded-full overflow-hidden">
-                    <div class="h-full bg-current" style="width: ${ai.confianza}%"></div>
-                </div>
-                <p class="text-xs text-gray-400 mt-2">Confianza ${ai.confianza}%</p>
-            `;
-        }
+			if (ai.recomendacion === 'COMPRA') {
+				colorClass = 'text-emerald-400';
+				iconHTML = '▲';
+				bgColor = 'border-emerald-400 bg-emerald-500/10';
+			} else if (ai.recomendacion === 'VENTA') {
+				colorClass = 'text-red-400';
+				iconHTML = '▼';
+				bgColor = 'border-red-400 bg-red-500/10';
+			} else {
+				colorClass = 'text-amber-400';
+				iconHTML = '→';
+				bgColor = 'border-amber-400 bg-amber-500/10';
+			}
+
+			container.className = `w-56 h-56 rounded-3xl flex flex-col items-center justify-center border-4 shadow-2xl ${bgColor}`;
+
+			container.innerHTML = `
+				<div class="${colorClass} text-8xl mb-4">${iconHTML}</div>
+				
+				<div class="${colorClass} text-5xl font-bold tracking-tighter mb-6">
+					${ai.recomendacion}
+				</div>
+
+				<div class="w-40 h-2.5 bg-white/20 rounded-full overflow-hidden mb-3">
+					<div class="h-full ${colorClass.replace('text-', 'bg-')}" 
+						 style="width: ${ai.confianza}%"></div>
+				</div>
+				
+				<p class="text-sm text-gray-300 font-medium">
+					Confianza ${ai.confianza}%
+				</p>
+			`;
+		}
 
         function nuevaConsulta() {
             document.getElementById('resultados').classList.add('hidden');
